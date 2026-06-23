@@ -26,11 +26,14 @@ if (PLACEHOLDERS_PROHIBIDOS.includes(JWT_SECRET)) {
   process.exit(1);
 }
 
-const REQUIRED_DB_ENV = ['DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_PORT', 'DB_SERVICE'];
-const DB_CONFIGURED = REQUIRED_DB_ENV.every(k => Boolean(process.env[k]));
-const dbEnvSet = REQUIRED_DB_ENV.some(k => Boolean(process.env[k]));
+const REQUIRED_DB_ENV = ['DB_USER', 'DB_PASSWORD'];
+const ORACLE_CONN_STRING = process.env.ORACLE_CONNECTION_STRING;
+const dbEnvSet = Boolean(process.env.DB_USER || process.env.DB_PASSWORD || process.env.DB_HOST || process.env.DB_PORT || process.env.DB_SERVICE || ORACLE_CONN_STRING);
+const DB_CONFIGURED = Boolean(process.env.DB_USER && process.env.DB_PASSWORD && (ORACLE_CONN_STRING || (process.env.DB_HOST && process.env.DB_PORT && process.env.DB_SERVICE)));
 if (dbEnvSet && !DB_CONFIGURED) {
-  const faltantes = REQUIRED_DB_ENV.filter(k => !process.env[k]);
+  const faltantes = ['DB_USER', 'DB_PASSWORD']
+    .filter(k => !process.env[k])
+    .concat(!ORACLE_CONN_STRING && (!process.env.DB_HOST || !process.env.DB_PORT || !process.env.DB_SERVICE) ? ['DB_HOST', 'DB_PORT', 'DB_SERVICE'] : []);
   console.warn(`⚠ Configuración de la base de datos incompleta. Faltan: ${faltantes.join(', ')}. El servidor arrancará en modo solo login.`);
 }
 
@@ -93,7 +96,7 @@ app.use(express.static(__dirname + '/public'));
 const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  connectionString: `${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_SERVICE}`
+  connectionString: ORACLE_CONN_STRING || `${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_SERVICE}`
 };
 
 let pool;
@@ -259,6 +262,15 @@ app.get('/api/test-conexion', (req, res) => {
     mensaje: 'Servidor disponible',
     usuariosCargados: estado.total,
     googleSheets: googleStatus
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    success: true,
+    uptime: process.uptime(),
+    env: process.env.NODE_ENV || 'production',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -626,7 +638,7 @@ app.use((err, req, res, next) => {
 });
 
 // ── Arranque ─────────────────────────────────────────────────────────────
-const PORT = process.env.SERVER_PORT || 3000;
+const PORT = process.env.PORT || process.env.SERVER_PORT || 3000;
 
 async function start() {
   if (DB_CONFIGURED) {

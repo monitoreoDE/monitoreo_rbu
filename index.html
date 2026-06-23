@@ -380,7 +380,16 @@
   </div>
 
 <script>
+  // Si sirves el frontend desde GitHub Pages o un host estático,
+  // define aquí la URL pública de tu backend Node/Express.
+  // Ejemplo:
+  // window.API_BASE_URL = 'https://mi-backend.example.com/api';
+
   function getApiBaseUrl() {
+    if (window.API_BASE_URL) {
+      return window.API_BASE_URL.replace(/\/+$/, '');
+    }
+
     const protocol = window.location.protocol;
     const host = window.location.hostname;
     const port = window.location.port;
@@ -396,7 +405,7 @@
     const contentType = response.headers.get('content-type') || '';
     const texto = await response.text();
     if (!contentType.includes('application/json')) {
-      throw new Error('El servidor no devolvió JSON. Verifica que node server.js esté corriendo en el puerto correcto.');
+      throw new Error('El servidor no devolvió JSON. Asegúrate de que el backend Node.js esté accesible y de que la URL de la API sea correcta.');
     }
     if (!texto) return {};
     try { return JSON.parse(texto); }

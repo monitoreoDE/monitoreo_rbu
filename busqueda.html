@@ -714,10 +714,19 @@
   </main>
 
 <script>
+  // Si sirves el frontend desde GitHub Pages o un host estático,
+  // define aquí la URL pública de tu backend Node/Express.
+  // Ejemplo:
+  // window.API_BASE_URL = 'https://mi-backend.example.com/api';
+
   function getApiBaseUrl() {
+    if (window.API_BASE_URL) {
+      return window.API_BASE_URL.replace(/\/+$/, '');
+    }
+
     const host = window.location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000/api';
-    return `${window.location.protocol}//${host}:3000/api`;
+    return `${window.location.origin}/api`;
   }
 
   const apiBaseUrl = getApiBaseUrl();
