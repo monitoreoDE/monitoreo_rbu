@@ -380,7 +380,7 @@ app.post('/api/buscar',
       });
     } catch (error) {
       logger.error(`Error en búsqueda simple: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
+      res.status(500).json({ error: `Error en la búsqueda: ${error.message}`, detalle: error.message });
     }
   }
 );
@@ -439,7 +439,7 @@ app.post('/api/buscar-avanzado',
       });
     } catch (error) {
       logger.error(`Error en búsqueda avanzada: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
+      res.status(500).json({ error: `Error en la búsqueda: ${error.message}`, detalle: error.message });
     }
   }
 );
@@ -491,7 +491,7 @@ app.post('/api/buscar-multiple',
       });
     } catch (error) {
       logger.error(`Error en búsqueda múltiple: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
+      res.status(500).json({ error: `Error en la búsqueda: ${error.message}`, detalle: error.message });
     }
   }
 );
@@ -556,7 +556,7 @@ app.post('/api/buscar-multiple-avanzado',
       });
     } catch (error) {
       logger.error(`Error en búsqueda múltiple avanzada: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
+      res.status(500).json({ error: `Error en la búsqueda: ${error.message}`, detalle: error.message });
     }
   }
 );
