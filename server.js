@@ -169,28 +169,32 @@ function normalizarBusquedaTexto(texto) {
   return String(texto || '').trim().replace(/\s+/g, ' ').slice(0, 100);
 }
 
-function construirCondicionBusqueda(campo, valor) {
+function construirCondicionBusqueda(campo, valor, parametroBase = 'criterio') {
   const texto = normalizarBusquedaTexto(valor);
   if (!texto) return null;
 
+  const bind = {};
   if (campo === 'VC_DNI') {
+    const key = parametroBase;
     if (/^\d{8}$/.test(texto)) {
-      return { clause: `${campo} = :criterio`, bind: { criterio: texto } };
+      bind[key] = texto;
+      return { clause: `${campo} = :${key}`, bind, count: 1 };
     }
-    return { clause: `${campo} LIKE :criterio`, bind: { criterio: `${texto}%` } };
+    bind[key] = `${texto}%`;
+    return { clause: `${campo} LIKE :${key}`, bind, count: 1 };
   }
 
   const tokens = texto.split(' ');
-  const bind = {};
   const clauses = tokens.map((token, index) => {
-    const key = `criterio${index}`;
+    const key = `${parametroBase}_${index}`;
     bind[key] = `${token}%`;
     return `UPPER(${campo}) LIKE UPPER(:${key})`;
   });
 
   return {
     clause: clauses.join(' AND '),
-    bind
+    bind,
+    count: tokens.length
   };
 }
 
@@ -376,7 +380,7 @@ app.post('/api/buscar',
       });
     } catch (error) {
       logger.error(`Error en búsqueda simple: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: 'Contacta al administrador del sistema' });
+      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
     }
   }
 );
@@ -403,16 +407,21 @@ app.post('/api/buscar-avanzado',
 
     for (const [campo, valor] of Object.entries(criterios)) {
       if (CAMPOS_VALIDOS.includes(campo) && valor && String(valor).trim()) {
-        const condicion = construirCondicionBusqueda(campo, valor);
+        const condicion = construirCondicionBusqueda(campo, valor, `c${idx}`);
         if (condicion) {
           whereClause.push(condicion.clause);
           Object.assign(bindParams, condicion.bind);
+          idx += condicion.count;
         }
       }
     }
 
     if (whereClause.length === 0) {
       return res.status(400).json({ error: 'Ingresa al menos un criterio válido' });
+    }
+
+    if (!pool) {
+      return res.status(503).json({ error: 'Servicio de búsqueda no disponible' });
     }
 
     try {
@@ -430,7 +439,7 @@ app.post('/api/buscar-avanzado',
       });
     } catch (error) {
       logger.error(`Error en búsqueda avanzada: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: 'Contacta al administrador del sistema' });
+      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
     }
   }
 );
@@ -482,7 +491,7 @@ app.post('/api/buscar-multiple',
       });
     } catch (error) {
       logger.error(`Error en búsqueda múltiple: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: 'Contacta al administrador del sistema' });
+      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
     }
   }
 );
@@ -528,6 +537,10 @@ app.post('/api/buscar-multiple-avanzado',
       return res.status(400).json({ error: 'Ingresa al menos un criterio válido' });
     }
 
+    if (!pool) {
+      return res.status(503).json({ error: 'Servicio de búsqueda no disponible' });
+    }
+
     try {
       const { total, datos } = await ejecutarBusquedaPaginada(wherePartes.join(' AND '), bindParams, pagina, porPagina);
 
@@ -543,7 +556,7 @@ app.post('/api/buscar-multiple-avanzado',
       });
     } catch (error) {
       logger.error(`Error en búsqueda múltiple avanzada: ${error.message}`);
-      res.status(500).json({ error: 'Error en la búsqueda', detalle: 'Contacta al administrador del sistema' });
+      res.status(500).json({ error: 'Error en la búsqueda', detalle: error.message });
     }
   }
 );
