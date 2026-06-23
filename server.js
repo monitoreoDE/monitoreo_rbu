@@ -165,6 +165,65 @@ function construirQueryConteo(whereClause) {
   return `SELECT COUNT(*) AS TOTAL FROM ${TABLA} WHERE ${whereClause}`;
 }
 
+function normalizarBusquedaTexto(texto) {
+  return String(texto || '').trim().replace(/\s+/g, ' ').slice(0, 100);
+}
+
+function construirCondicionBusqueda(campo, valor) {
+  const texto = normalizarBusquedaTexto(valor);
+  if (!texto) return null;
+
+  if (campo === 'VC_DNI') {
+    if (/^\d{8}$/.test(texto)) {
+      return { clause: `${campo} = :criterio`, bind: { criterio: texto } };
+    }
+    return { clause: `${campo} LIKE :criterio`, bind: { criterio: `${texto}%` } };
+  }
+
+  const tokens = texto.split(' ');
+  const bind = {};
+  const clauses = tokens.map((token, index) => {
+    const key = `criterio${index}`;
+    bind[key] = `${token}%`;
+    return `UPPER(${campo}) LIKE UPPER(:${key})`;
+  });
+
+  return {
+    clause: clauses.join(' AND '),
+    bind
+  };
+}
+
+function construirCondicionLista(campo, lista, parametroBase) {
+  const valores = lista.map(v => normalizarBusquedaTexto(v)).filter(Boolean);
+  if (valores.length === 0) return null;
+
+  const bind = {};
+  if (campo === 'VC_DNI') {
+    const placeholders = valores.map((valor, i) => {
+      const key = `${parametroBase}${i}`;
+      bind[key] = valor;
+      return `:${key}`;
+    });
+    return { clause: `${campo} IN (${placeholders.join(', ')})`, bind };
+  }
+
+  const clauses = valores.map((valor, valueIndex) => {
+    const tokens = valor.split(' ');
+    const subClauses = tokens.map((token, tokenIndex) => {
+      const key = `${parametroBase}${valueIndex}_${tokenIndex}`;
+      bind[key] = `${token}%`;
+      return `UPPER(${campo}) LIKE UPPER(:${key})`;
+    });
+    return `(${subClauses.join(' AND ')})`;
+  });
+
+  return {
+    clause: clauses.join(' OR '),
+    bind
+  };
+}
+
 async function ejecutarBusquedaPaginada(whereClause, bindParams, pagina, porPagina) {
   let connection;
   try {
@@ -299,8 +358,11 @@ app.post('/api/buscar',
       if (!pool) {
         return res.status(503).json({ error: 'Servicio de búsqueda no disponible' });
       }
-      const whereClause = `UPPER(${campo}) LIKE UPPER('%' || :criterio || '%')`;
-      const { total, datos } = await ejecutarBusquedaPaginada(whereClause, { criterio }, pagina, porPagina);
+      const condicion = construirCondicionBusqueda(campo, criterio);
+      if (!condicion) {
+        return res.status(400).json({ error: 'Criterio inválido' });
+      }
+      const { total, datos } = await ejecutarBusquedaPaginada(condicion.clause, condicion.bind, pagina, porPagina);
 
       auditarBusqueda({ usuario: req.usuario, ip, tipo: 'simple', criterios: { campo, criterio }, totalResultados: total });
 
@@ -341,10 +403,11 @@ app.post('/api/buscar-avanzado',
 
     for (const [campo, valor] of Object.entries(criterios)) {
       if (CAMPOS_VALIDOS.includes(campo) && valor && String(valor).trim()) {
-        const paramName = `param${idx}`;
-        whereClause.push(`UPPER(${campo}) LIKE UPPER('%' || :${paramName} || '%')`);
-        bindParams[paramName] = String(valor).trim().slice(0, 100);
-        idx++;
+        const condicion = construirCondicionBusqueda(campo, valor);
+        if (condicion) {
+          whereClause.push(condicion.clause);
+          Object.assign(bindParams, condicion.bind);
+        }
       }
     }
 
@@ -400,16 +463,12 @@ app.post('/api/buscar-multiple',
         return res.status(503).json({ error: 'Servicio de búsqueda no disponible' });
       }
 
-      // Construir IN clause con bind parameters nombrados
-      const bindParams = {};
-      const placeholders = valores.map((v, i) => {
-        const key = `v${i}`;
-        bindParams[key] = v;
-        return `:${key}`;
-      });
-      const whereClause = `UPPER(${campo}) IN (${placeholders.map(p => `UPPER(${p})`).join(', ')})`;
+      const condicion = construirCondicionLista(campo, valores, 'pm');
+      if (!condicion) {
+        return res.status(400).json({ error: 'Valores inválidos para la búsqueda múltiple' });
+      }
 
-      const { total, datos } = await ejecutarBusquedaPaginada(whereClause, bindParams, pagina, porPagina);
+      const { total, datos } = await ejecutarBusquedaPaginada(condicion.clause, condicion.bind, pagina, porPagina);
 
       auditarBusqueda({ usuario: req.usuario, ip, tipo: 'multiple', criterios: { campo, cantidad: valores.length }, totalResultados: total });
 
@@ -457,19 +516,11 @@ app.post('/api/buscar-multiple-avanzado',
         .slice(0, 200);
       if (lista.length === 0) continue;
 
-      if (lista.length === 1) {
-        // Un solo valor: usa LIKE para búsqueda parcial
-        const key = `p${paramIdx++}`;
-        bindParams[key] = lista[0].slice(0, 100);
-        wherePartes.push(`UPPER(${campo}) LIKE UPPER('%' || :${key} || '%')`);
-      } else {
-        // Varios valores: usa IN con coincidencia exacta
-        const placeholders = lista.map((v, i) => {
-          const key = `p${paramIdx++}`;
-          bindParams[key] = v.slice(0, 100);
-          return `:${key}`;
-        });
-        wherePartes.push(`UPPER(${campo}) IN (${placeholders.map(p => `UPPER(${p})`).join(', ')})`);
+      const condicion = construirCondicionLista(campo, lista, `p${paramIdx}`);
+      if (condicion) {
+        wherePartes.push(condicion.clause);
+        Object.assign(bindParams, condicion.bind);
+        paramIdx += Object.keys(condicion.bind).length;
       }
     }
 

@@ -838,7 +838,7 @@
     let controller = null, timeoutId = null;
     try {
       controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 15000);
+      timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const response = await fetch(`${apiBaseUrl}/buscar`, {
         method: 'POST', mode: 'cors', cache: 'no-store', signal: controller.signal,
@@ -886,7 +886,7 @@
     let controller = null, timeoutId = null;
     try {
       controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 15000);
+      timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const response = await fetch(`${apiBaseUrl}/buscar-avanzado`, {
         method: 'POST', mode: 'cors', cache: 'no-store', signal: controller.signal,
@@ -1098,7 +1098,7 @@
     let controller = null, timeoutId = null;
     try {
       controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 20000);
+      timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const response = await fetch(`${apiBaseUrl}/buscar-multiple`, {
         method: 'POST', mode: 'cors', cache: 'no-store', signal: controller.signal,
@@ -1203,7 +1203,7 @@
     let controller = null, timeoutId = null;
     try {
       controller = new AbortController();
-      timeoutId = setTimeout(() => controller.abort(), 20000);
+      timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const response = await fetch(`${apiBaseUrl}/buscar-multiple-avanzado`, {
         method: 'POST', mode: 'cors', cache: 'no-store', signal: controller.signal,
